@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+
+# Секреты и токены
+.env
+*.token
+secrets.json
+
+# ВАЖНО: артефакты перехвата трафика содержат личные данные/токены — не коммитим
+research/captures/
+*.flow
+*.har
+*.mitm
