@@ -20,6 +20,8 @@ secrets.json
 
 # ВАЖНО: артефакты перехвата трафика содержат личные данные/токены — не коммитим
 research/captures/
+research/interception/*.0
 *.flow
+*.flows
 *.har
 *.mitm
