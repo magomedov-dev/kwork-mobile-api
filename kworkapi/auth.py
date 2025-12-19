@@ -1,13 +1,16 @@
-"""Авторизация и управление токеном сессии.
+"""Авторизация и состояние сессии.
 
-Схема (по prior art, подтвердить захватом в Фазе 1): POST на метод ``signIn`` с
-полями login/password (+ возможно phone), в ответе — пользовательский ``token``,
-который дальше передаётся в теле каждого запроса.
+Подтверждено живым трафиком:
+  POST /signIn  (login, password, recaptcha_pass_token?, uad, device) + заголовок Authorization
+  → {"success": true, "response": {"token": "...", "expired": 31536000, "need_2fa": false}}
+
+`slrememberme` приходит в Set-Cookie ответа и подхватывается cookie-jar транспорта;
+для авторизованных запросов токена `token` достаточно.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING
 
 from kworkapi.exceptions import KworkAuthError
@@ -18,55 +21,68 @@ if TYPE_CHECKING:
 
 @dataclass
 class Session:
-    """Состояние авторизованной сессии."""
+    """Состояние авторизованной сессии (сериализуемо для хранения)."""
 
     token: str
+    uad: str
+    slrememberme: str = ""
+    expired: int | None = None
     user_id: int | None = None
-    raw: dict | None = None
+    need_2fa: bool = False
 
     @property
     def is_authenticated(self) -> bool:
         return bool(self.token)
 
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Session":
+        fields = {"token", "uad", "slrememberme", "expired", "user_id", "need_2fa"}
+        return cls(**{k: v for k, v in data.items() if k in fields})
+
 
 class Auth:
-    """Логика входа. Хранение токена снаружи — забота вызывающего кода/клиента."""
+    """Логика входа. Хранение сессии — задача вызывающего кода/клиента."""
 
     def __init__(self, transport: "Transport") -> None:
         self._transport = transport
 
-    async def sign_in(self, login: str, password: str, *, phone: str = "") -> Session:
-        """Войти по логину и паролю, вернуть Session с токеном.
+    async def sign_in(
+        self,
+        login: str,
+        password: str,
+        *,
+        recaptcha_pass_token: str = "",
+    ) -> Session:
+        """Войти по логину/паролю. Возвращает Session с токеном.
 
-        TODO(capture): подтвердить имя метода ("signIn") и набор полей формы, а также
-        путь к токену в ответе. Ниже — наиболее вероятная схема из prior art.
+        :raises KworkAuthError: если вход не удался или токен не найден.
         """
         body = await self._transport.call(
             "signIn",
-            data={"login": login, "password": password, "phone": phone},
+            data={
+                "login": login,
+                "password": password,
+                "recaptcha_pass_token": recaptcha_pass_token,
+            },
+            auth=False,
         )
 
-        token = self._extract_token(body)
-        if not token:
-            raise KworkAuthError("В ответе signIn не найден token", payload=body)
+        resp = body.get("response") if isinstance(body, dict) else None
+        if not isinstance(resp, dict) or not resp.get("token"):
+            raise KworkAuthError("В ответе /signIn не найден token", payload=body)
 
-        user_id = None
-        if isinstance(body, dict):
-            data = body.get("response") or body.get("data") or body
-            if isinstance(data, dict):
-                user_id = data.get("id") or data.get("user_id")
+        return Session(
+            token=resp["token"],
+            uad=self._transport.uad,
+            slrememberme=self._transport.current_slrememberme(),
+            expired=resp.get("expired"),
+            need_2fa=bool(resp.get("need_2fa", False)),
+        )
 
-        return Session(token=token, user_id=user_id, raw=body)
-
-    @staticmethod
-    def _extract_token(body: dict) -> str | None:
-        # TODO(capture): уточнить точный путь к токену по реальному ответу.
-        if not isinstance(body, dict):
-            return None
-        if "token" in body:
-            return body["token"]
-        for key in ("response", "data", "result"):
-            section = body.get(key)
-            if isinstance(section, dict) and section.get("token"):
-                return section["token"]
-        return None
+    async def logout(self, *, push_token: str = "") -> bool:
+        """Выйти на сервере (инвалидировать сессию)."""
+        body = await self._transport.call("logout", data={"pushToken": push_token})
+        return bool(body.get("success", True)) if isinstance(body, dict) else True

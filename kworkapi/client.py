@@ -17,41 +17,74 @@ from kworkapi.transport import Transport
 class KworkClient:
     """Асинхронный клиент приватного API kwork.ru.
 
-    Пример::
+    Примеры::
 
         async with KworkClient() as kw:
             await kw.login("user@example.com", "secret")
-            projects = await kw.projects.feed()
+            me = await kw.account.me()
+
+        # восстановление ранее сохранённой сессии:
+        async with KworkClient.from_session(saved_session) as kw:
+            ...
     """
 
     def __init__(
         self,
         *,
-        token: str | None = None,
+        session: Session | None = None,
         transport: Transport | None = None,
         **transport_kwargs,
     ) -> None:
+        # uad сессии имеет приоритет: запросы должны идти с тем же идентификатором.
+        if session and transport is None and "uad" not in transport_kwargs:
+            transport_kwargs["uad"] = session.uad
         self._transport = transport or Transport(**transport_kwargs)
         self._auth = Auth(self._transport)
-        self.session: Session | None = Session(token=token) if token else None
+        self.session = session
+        if session and session.slrememberme:
+            # вернём cookie, чтобы авторизованные запросы её отправляли
+            self._transport._client.cookies.set("slrememberme", session.slrememberme)
 
         # Группы методов (ресурсы).
+        self.account = AccountResource(self)
         self.catalog = CatalogResource(self)
         self.projects = ProjectsResource(self)
         self.orders = OrdersResource(self)
         self.messages = MessagesResource(self)
-        self.account = AccountResource(self)
+
+    @classmethod
+    def from_session(cls, session: Session, **kwargs) -> "KworkClient":
+        """Создать клиент из сохранённой сессии (token + uad + slrememberme)."""
+        return cls(session=session, **kwargs)
 
     # --- авторизация -----------------------------------------------------
 
-    async def login(self, login: str, password: str, *, phone: str = "") -> Session:
+    async def login(
+        self,
+        login: str,
+        password: str,
+        *,
+        recaptcha_pass_token: str = "",
+    ) -> Session:
         """Войти по логину/паролю и сохранить сессию в клиенте."""
-        self.session = await self._auth.sign_in(login, password, phone=phone)
+        self.session = await self._auth.sign_in(
+            login, password, recaptcha_pass_token=recaptcha_pass_token
+        )
         return self.session
+
+    async def logout(self, *, push_token: str = "") -> bool:
+        """Выйти на сервере и очистить локальную сессию."""
+        ok = await self._auth.logout(push_token=push_token)
+        self.session = None
+        return ok
 
     @property
     def token(self) -> str | None:
         return self.session.token if self.session else None
+
+    @property
+    def is_authenticated(self) -> bool:
+        return bool(self.session and self.session.is_authenticated)
 
     # --- низкоуровневый вызов (используется ресурсами) -------------------
 
@@ -59,10 +92,10 @@ class KworkClient:
         """Вызвать метод API. При ``auth=True`` требуется активная сессия."""
         token = None
         if auth:
-            if not self.session or not self.session.is_authenticated:
+            if not self.is_authenticated:
                 raise KworkAuthError(f"Метод {method} требует авторизации — сначала login()")
             token = self.session.token
-        return await self._transport.call(method, data=data, token=token)
+        return await self._transport.call(method, data=data, token=token, auth=auth)
 
     # --- управление жизненным циклом ------------------------------------
 

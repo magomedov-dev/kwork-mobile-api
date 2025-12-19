@@ -10,16 +10,12 @@ from kworkapi.resources.base import Resource
 
 class AccountResource(Resource):
     async def me(self) -> dict:
-        """Профиль текущего пользователя."""
-        # TODO(capture): подтвердить метод (часто отдаётся вместе с signIn).
-        return await self._call("actualAccount")
+        """Профиль и состояние текущего пользователя (баланс, счётчики и т.д.).
 
-    async def notifications(self) -> dict:
-        """Актуальные уведомления/счётчики."""
-        # TODO(capture): подтвердить метод ("actualNotice"?).
-        return await self._call("actualNotice")
+        Эндпоинт `/actor` — подтверждён живым трафиком (см. docs/06).
+        """
+        return await self._call("actor")
 
-    async def balance(self) -> dict:
-        """Баланс кошелька."""
-        # TODO(capture)
-        return await self._call("walletInfo")
+    async def notifications(self, *, page: int = 1) -> dict:
+        """Лента уведомлений пользователя (`/notificationsFetch`)."""
+        return await self._call("notificationsFetch", data={"page": page})
