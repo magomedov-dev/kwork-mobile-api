@@ -1,0 +1,74 @@
+"""Сообщения и чаты: диалоги, история переписки, отправка."""
+
+from __future__ import annotations
+
+import os
+
+from kworkapi.models.dialog import Dialog, InboxMessage, SentMessage
+from kworkapi.resources.base import Resource
+
+
+def _message_key() -> str:
+    """Случайный идемпотентный ключ сообщения (как в приложении)."""
+    return os.urandom(6).hex()[:10]
+
+
+class MessagesResource(Resource):
+    async def dialogs(self, *, page: int = 1, filter: str = "all") -> list[Dialog]:
+        """Список диалогов (`/dialogs`)."""
+        data = {"page": page, "filter": filter}
+        return self._list(await self._call("dialogs", data=data), Dialog)
+
+    async def dialog(self, user_id: int) -> Dialog:
+        """Метаданные диалога с пользователем (`/getDialog`)."""
+        return self._model(await self._call("getDialog", data={"id": user_id}), Dialog)
+
+    async def history(
+        self, user_id: int, *, limit: int = 30, direction: int = 0
+    ) -> list[InboxMessage]:
+        """История переписки (`/getInboxTracks`).
+
+        Пагинация — через `direction` (лента сообщений), а не страницами.
+        """
+        data = {"userId": user_id, "limit": limit, "direction": direction, "makeOnline": 0}
+        return self._list(await self._call("getInboxTracks", data=data), InboxMessage)
+
+    async def send(self, user_id: int, text: str) -> SentMessage:
+        """Отправить сообщение пользователю (`/inboxCreate`)."""
+        data = {"user_id": user_id, "text": text, "message_key": _message_key()}
+        return self._model(await self._call("inboxCreate", data=data), SentMessage)
+
+    async def mark_read(self, user_id: int) -> dict:
+        """Отметить диалог прочитанным (`/inboxRead`)."""
+        return await self._call("inboxRead", data={"userId": user_id})
+
+    async def mark_unread(self, user_id: int) -> dict:
+        """Отметить диалог непрочитанным (`/unreadDialog`)."""
+        return await self._call("unreadDialog", data={"user_id": user_id})
+
+    async def set_starred(self, user_id: int, starred: bool = True) -> dict:
+        """Добавить/убрать диалог из избранного (`/setDialogStarred`)."""
+        data = {"userId": user_id, "isStarred": 1 if starred else 0}
+        return self._payload(await self._call("setDialogStarred", data=data))
+
+    async def block(self, user_id: int) -> dict:
+        """Заблокировать диалог с пользователем (`/blockDialog`)."""
+        return self._payload(await self._call("blockDialog", data={"blockUserId": user_id}))
+
+    async def unblock(self, user_id: int) -> dict:
+        """Разблокировать диалог (`/unblockDialog`)."""
+        return self._payload(await self._call("unblockDialog", data={"blockUserId": user_id}))
+
+    async def edit(self, message_id: int, text: str, *, reply_message_id: int | None = None) -> dict:
+        """Отредактировать сообщение (`/inboxEdit`)."""
+        data = {"id": message_id, "text": text, "reply_message_id": reply_message_id}
+        return await self._call("inboxEdit", data=data)
+
+    async def delete(self, message_id: int) -> dict:
+        """Удалить сообщение (`/inboxDelete`)."""
+        return await self._call("inboxDelete", data={"id": message_id})
+
+    async def search(self, text: str, *, user_id: int = 0, page: int = 1) -> dict:
+        """Поиск по сообщениям (`/searchInboxes`)."""
+        data = {"text": text, "userId": user_id, "page": page}
+        return await self._call("searchInboxes", data=data)

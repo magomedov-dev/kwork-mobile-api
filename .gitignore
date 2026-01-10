@@ -1,3 +1,6 @@
+# Локальные инструменты реверса (jadx, frida-server и т.п.)
+.tooling/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -7,6 +10,9 @@ venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
 dist/
 build/
 
@@ -17,6 +23,8 @@ secrets.json
 
 # ВАЖНО: артефакты перехвата трафика содержат личные данные/токены — не коммитим
 research/captures/
+research/interception/*.0
 *.flow
+*.flows
 *.har
 *.mitm
