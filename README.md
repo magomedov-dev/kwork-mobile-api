@@ -30,10 +30,19 @@ tests/           — тесты (моки через respx)
 живом API. Подробности — в [`docs/`](docs/README.md), план — в
 [`docs/05-roadmap.md`](docs/05-roadmap.md).
 
-## Установка (dev)
+## Документация
+
+Полное руководство пользователя (установка, авторизация, все ресурсы с примерами,
+обработка ошибок, REST-сервис) — в **[`docs/07-usage.md`](docs/07-usage.md)**.
+Остальная документация (реверс, справочник API, архитектура, roadmap) — в
+[`docs/`](docs/README.md).
+
+## Установка
 
 ```bash
-python -m venv .venv && source .venv/bin/activate.fish  # fish: source .venv/bin/activate.fish
+git clone https://github.com/magomedov-dev/kworkapi.git
+cd kworkapi
+python -m venv .venv && source .venv/bin/activate.fish  # bash: source .venv/bin/activate
 pip install -e ".[server,dev]"
 ```
 

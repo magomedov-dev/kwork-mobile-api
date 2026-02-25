@@ -76,6 +76,6 @@
 - Не покрыты (план 4b): детальные операции с заказами (approve/cancel/стадии/отзывы),
   загрузка файлов/аватара, голосовые сообщения.
 
-[0.3.0]: https://example.com/kworkapi/releases/tag/v0.3.0
-[0.2.0]: https://example.com/kworkapi/releases/tag/v0.2.0
-[0.1.0]: https://example.com/kworkapi/releases/tag/v0.1.0
+[0.3.0]: https://github.com/magomedov-dev/kworkapi/releases/tag/v0.3.0
+[0.2.0]: https://github.com/magomedov-dev/kworkapi/releases/tag/v0.2.0
+[0.1.0]: https://github.com/magomedov-dev/kworkapi/releases/tag/v0.1.0
